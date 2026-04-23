@@ -1,0 +1,75 @@
+/**
+ * Vercel API Route: /api/edit-text
+ * CommonJS — compatible con package.json "type":"module" del frontend.
+ * Aplica ediciones de texto con instrucciones usando Groq LLM.
+ */
+
+module.exports.config = {
+  api: { bodyParser: { sizeLimit: '2mb' } },
+};
+
+const SYSTEM_PROMPT = `Actúas únicamente sobre el texto proporcionado por el usuario.
+No inventes información.
+No agregues hechos no presentes en el texto original.
+Limítate estrictamente a las instrucciones del usuario.
+Si el usuario pide corregir ortografía, solo corrige ortografía.
+Si el usuario pide reorganizar, solo reorganiza.
+Si el usuario pide resumir, resume sin agregar contenido nuevo.
+REGLA CRÍTICA SOBRE NEGRITA: Solo aplica negrita (etiquetas <b></b>) cuando el usuario lo pida EXPLÍCITAMENTE. NUNCA pongas en negrita texto por tu cuenta. No pongas en negrita números romanos, títulos, subtítulos ni ningún otro elemento a menos que el usuario lo solicite.
+Si el texto ya contiene etiquetas <b> existentes, presérvalas sin modificar.
+Responde SOLO con el texto modificado, sin explicaciones adicionales.`;
+
+module.exports.default = async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const GROQ_API_KEY = process.env.GROQ_API_KEY;
+  if (!GROQ_API_KEY)
+    return res.status(500).json({ error: 'GROQ_API_KEY no configurado' });
+
+  const { text, instruction } = req.body;
+  if (!text || !instruction)
+    return res.status(400).json({ error: 'text e instruction son requeridos' });
+
+  console.log(`[edit-text] Instrucción: "${instruction.substring(0, 80)}..."`);
+
+  try {
+    const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_API_KEY}` },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: `TEXTO A MODIFICAR:\n\n${text}\n\nINSTRUCCIÓN:\n${instruction}` },
+        ],
+        temperature: 0.3,
+        max_tokens: 8000,
+      }),
+    });
+
+    if (!groqResponse.ok) {
+      const errText = await groqResponse.text();
+      console.error('[edit-text] Groq error:', groqResponse.status, errText);
+      if (groqResponse.status === 429)
+        return res.status(429).json({ error: 'Rate limit excedido, intenta de nuevo.' });
+      return res.status(500).json({ error: 'Error al editar con Groq' });
+    }
+
+    const result = await groqResponse.json();
+    const editedText = (result.choices?.[0]?.message?.content || '').trim();
+
+    console.log('[edit-text] ✅ Éxito');
+    return res.status(200).json({ success: true, editedText });
+
+  } catch (error) {
+    console.error('[edit-text] Error:', error);
+    return res.status(500).json({
+      error: error instanceof Error ? error.message : 'Error inesperado',
+    });
+  }
+};

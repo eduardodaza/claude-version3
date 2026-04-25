@@ -1,7 +1,5 @@
 /**
- * Vercel API Route: /api/parse-transcription
- * CommonJS — compatible con package.json "type":"module" del frontend.
- * Parsea transcripciones radiológicas usando Groq LLM con tool calling.
+ * Vercel API Route: /api/parse-transcription — versión con diagnóstico
  */
 
 module.exports.config = {
@@ -27,7 +25,7 @@ Reglas IMPORTANTES:
 - REGLA TAC ABDOMEN/TÓRAX/TORACOABDOMINAL: Si NO dice "simple" explícitamente → OBLIGATORIAMENTE usa plantilla contrastada.
 - Si no hay datos clínicos, hallazgos o conclusiones, devuelve cadena vacía "", NUNCA la palabra "null".
 - lateralidad: null si no aplica. NUNCA devuelvas "null" como texto.
-- nombre_archivo_sugerido: nombre paciente + plantilla + región + lateralidad (si aplica). Para musculoesquelético agrega parte del cuerpo y lateralidad.`;
+- nombre_archivo_sugerido: nombre paciente + plantilla + región + lateralidad (si aplica).`;
 
 const tools = [{
   type: 'function',
@@ -74,17 +72,28 @@ module.exports.default = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const GROQ_API_KEY = process.env.GROQ_API_KEY;
+
+  const diagnostico = {
+    has_GROQ_API_KEY: !!GROQ_API_KEY,
+    node_version: process.version,
+    body_keys: Object.keys(req.body || {}),
+    transcriptionText_length: req.body?.transcriptionText?.length || 0,
+    templateNames_count: req.body?.templateNames?.length || 0,
+  };
+
+  console.log('[parse-transcription] DIAGNÓSTICO:', JSON.stringify(diagnostico));
+
   if (!GROQ_API_KEY)
-    return res.status(500).json({ error: 'GROQ_API_KEY no configurado' });
+    return res.status(500).json({ error: 'GROQ_API_KEY no configurado', diagnostico });
 
-  const { transcriptionText, templateNames } = req.body;
+  const { transcriptionText, templateNames } = req.body || {};
   if (!transcriptionText || !templateNames)
-    return res.status(400).json({ error: 'Se requiere transcriptionText y templateNames' });
-
-  console.log('[parse-transcription] Procesando...');
+    return res.status(400).json({ error: 'Se requiere transcriptionText y templateNames', diagnostico });
 
   try {
     const fullSystemPrompt = `${systemPrompt}\n\nLista de plantillas disponibles:\n${JSON.stringify(templateNames)}`;
+
+    console.log('[parse-transcription] Llamando a Groq...');
 
     const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -102,24 +111,24 @@ module.exports.default = async function handler(req, res) {
       }),
     });
 
+    const responseText = await groqResponse.text();
+    console.log('[parse-transcription] Groq status:', groqResponse.status);
+    console.log('[parse-transcription] Groq response:', responseText.substring(0, 500));
+
     if (!groqResponse.ok) {
-      const errText = await groqResponse.text();
-      console.error('[parse-transcription] Groq error:', groqResponse.status, errText);
-      if (groqResponse.status === 429)
-        return res.status(429).json({ error: 'Límite de solicitudes excedido, intenta de nuevo.' });
-      return res.status(500).json({ error: 'Error al comunicarse con Groq' });
+      let errMsg = 'Error al comunicarse con Groq';
+      try { errMsg = JSON.parse(responseText).error?.message || errMsg; } catch { errMsg = responseText || errMsg; }
+      return res.status(groqResponse.status).json({ error: errMsg, groq_status: groqResponse.status, groq_response: responseText.substring(0, 300), diagnostico });
     }
 
-    const aiData = await groqResponse.json();
+    const aiData = JSON.parse(responseText);
     const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
 
     if (!toolCall?.function?.arguments) {
       const content = aiData.choices?.[0]?.message?.content || '';
       const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || content.match(/(\{[\s\S]*\})/);
-      if (!jsonMatch) {
-        console.error('[parse-transcription] Sin tool call ni JSON en respuesta:', JSON.stringify(aiData));
-        return res.status(500).json({ error: 'No se pudo parsear la respuesta de Groq' });
-      }
+      if (!jsonMatch)
+        return res.status(500).json({ error: 'No se pudo parsear la respuesta de Groq', raw: content.substring(0, 300), diagnostico });
       return res.status(200).json(JSON.parse(jsonMatch[1] || jsonMatch[0]));
     }
 
@@ -128,9 +137,9 @@ module.exports.default = async function handler(req, res) {
     return res.status(200).json(parsed);
 
   } catch (error) {
-    console.error('[parse-transcription] Error:', error);
-    return res.status(500).json({
-      error: error instanceof Error ? error.message : 'Error inesperado',
-    });
+    const msg = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : '';
+    console.error('[parse-transcription] EXCEPCIÓN:', msg);
+    return res.status(500).json({ error: msg, stack: stack.substring(0, 500), diagnostico });
   }
 };

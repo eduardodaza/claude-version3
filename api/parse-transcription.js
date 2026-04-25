@@ -72,29 +72,26 @@ module.exports.default = async function handler(req, res) {
     return res.status(500).json({ error: 'GROQ_API_KEY no configurado' });
 
   const { transcriptionText, templateNames } = req.body || {};
-  if (!transcriptionText || !templateNames)
-    return res.status(400).json({ error: 'Se requiere transcriptionText y templateNames' });
+  if (!transcriptionText)
+    return res.status(400).json({ error: 'Se requiere transcriptionText' });
 
   try {
-    // Filtrar plantillas relevantes según palabras clave de la transcripción
-    // para no enviar las 89 plantillas completas a Groq
     const textoLower = transcriptionText.toLowerCase();
     const esTAC = textoLower.includes('tac');
     const esRM = textoLower.includes(' rm ') || textoLower.includes('resonancia');
 
-    const plantillasFiltradas = templateNames.filter(nombre => {
+    const plantillasFiltradas = (templateNames || []).filter(nombre => {
       const n = nombre.toLowerCase();
       if (esTAC && !esRM) return n.includes('tac');
       if (esRM && !esTAC) return n.includes('rm') || n.includes('++rm');
-      return true; // si hay ambos o ninguno, enviar todas
+      return true;
     });
 
-    // Si el filtro dejó muy pocas, usar todas (caso extremo)
     const plantillasAUsar = plantillasFiltradas.length >= 3
       ? plantillasFiltradas
-      : templateNames;
+      : (templateNames || []);
 
-    console.log(`[parse-transcription] Plantillas filtradas: ${plantillasAUsar.length} de ${templateNames.length}`);
+    console.log(`[parse-transcription] Plantillas: ${plantillasAUsar.length} de ${(templateNames||[]).length}`);
 
     const fullSystemPrompt = `${systemPrompt}\n\nPLANTILLAS DISPONIBLES:\n${plantillasAUsar.join('\n')}`;
 

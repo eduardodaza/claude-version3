@@ -1,37 +1,33 @@
-/**
- * Vercel API Route: /api/parse-transcription — versión con diagnóstico
- */
-
 module.exports.config = {
   api: { bodyParser: { sizeLimit: '2mb' } },
 };
 
-const systemPrompt = `Eres un parser de transcripciones médicas de radiología. Tu tarea es analizar una transcripción dictada y extraer cada estudio individual con su información.
+const systemPrompt = `Eres un parser de transcripciones médicas de radiología. Extrae cada estudio y devuelve JSON via tool call.
 
-Para cada estudio debes identificar:
-1. nombre_paciente: El nombre completo del paciente (se dice al inicio de cada estudio)
-2. tipo_estudio: El tipo de estudio (TAC o RM/Resonancia)
-3. region: La región anatómica del estudio (ej: abdomen, cráneo, columna lumbar, rodilla, etc.)
-4. lateralidad: Si aplica (derecha, izquierda, bilateral), null si no aplica
-5. es_contrastado: true si se menciona explícitamente que es contrastado, false si es simple o no se especifica
-6. datos_clinicos: ÚNICAMENTE el texto que el médico dicta explícitamente como "indicación", "diagnóstico", "datos clínicos" o "indicaciones clínicas". Solo ese fragmento corto. Si no se dicta ninguna indicación o diagnóstico, devuelve cadena vacía "".
-7. conclusiones: ÚNICAMENTE el texto que el médico dicta explícitamente como "conclusiones", "conclusión" o "impresión diagnóstica". Solo ese fragmento específico. Si no se dictan conclusiones explícitamente, devuelve cadena vacía "".
-8. hallazgos: ABSOLUTAMENTE TODO el resto del contenido descriptivo de la transcripción que NO sea conclusiones ni indicación/diagnóstico.
+CAMPOS por estudio:
+- nombre_paciente: nombre completo del paciente
+- tipo_estudio: TAC o RM
+- region: región anatómica
+- lateralidad: "derecha"/"izquierda"/"bilateral" o null
+- es_contrastado: true/false
+- datos_clinicos: solo texto de "indicación"/"diagnóstico"/"datos clínicos", o ""
+- conclusiones: solo texto de "conclusiones"/"conclusión"/"impresión diagnóstica", o ""
+- hallazgos: TODO lo demás que no sea conclusiones ni datos_clinicos
+- plantilla_match: nombre exacto de la plantilla de la lista, o null
+- nombre_archivo_sugerido: nombre_paciente + plantilla + región + lateralidad
 
-Reglas IMPORTANTES:
-- REGLA MUSCULOESQUELÉTICO: Si el estudio es TAC de hombro, tobillo, mano, pie, cadera, pierna, brazo o rodilla, usa la plantilla que contenga "musculoesquelético" o "musculoesqueletico".
-- REGLA ESTRICTA DE MODALIDAD: Si el estudio es TAC, SOLO usa plantillas con "TAC". Si es RM, SOLO usa plantillas con "RM" o "++RM". NUNCA mezcles modalidades.
-- REGLA RM DE HOMBRO: "ruptura parcial" → plantilla con "parcial"; "ruptura completa" → plantilla con "completa"; sin ruptura → plantilla con "tendinosis".
-- REGLA TAC ABDOMEN/TÓRAX/TORACOABDOMINAL: Si NO dice "simple" explícitamente → OBLIGATORIAMENTE usa plantilla contrastada.
-- Si no hay datos clínicos, hallazgos o conclusiones, devuelve cadena vacía "", NUNCA la palabra "null".
-- lateralidad: null si no aplica. NUNCA devuelvas "null" como texto.
-- nombre_archivo_sugerido: nombre paciente + plantilla + región + lateralidad (si aplica).`;
+REGLAS DE PLANTILLA:
+1. TAC → solo plantillas con "TAC". RM → solo plantillas con "RM". NUNCA mezclar.
+2. TAC de hombro/tobillo/mano/pie/cadera/pierna/brazo/rodilla → plantilla con "musculoesquelético".
+3. TAC abdomen/tórax/toracoabdominal sin "simple" → usar plantilla contrastada.
+4. RM hombro: "ruptura parcial"→plantilla con "parcial"; "ruptura completa"→"completa"; sin ruptura→"tendinosis".
+5. Campos sin contenido → cadena vacía "", nunca "null" como texto.`;
 
 const tools = [{
   type: 'function',
   function: {
     name: 'parse_transcription_result',
-    description: 'Return the parsed studies from the medical transcription',
+    description: 'Return parsed studies',
     parameters: {
       type: 'object',
       properties: {
@@ -72,28 +68,35 @@ module.exports.default = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const GROQ_API_KEY = process.env.GROQ_API_KEY;
-
-  const diagnostico = {
-    has_GROQ_API_KEY: !!GROQ_API_KEY,
-    node_version: process.version,
-    body_keys: Object.keys(req.body || {}),
-    transcriptionText_length: req.body?.transcriptionText?.length || 0,
-    templateNames_count: req.body?.templateNames?.length || 0,
-  };
-
-  console.log('[parse-transcription] DIAGNÓSTICO:', JSON.stringify(diagnostico));
-
   if (!GROQ_API_KEY)
-    return res.status(500).json({ error: 'GROQ_API_KEY no configurado', diagnostico });
+    return res.status(500).json({ error: 'GROQ_API_KEY no configurado' });
 
   const { transcriptionText, templateNames } = req.body || {};
   if (!transcriptionText || !templateNames)
-    return res.status(400).json({ error: 'Se requiere transcriptionText y templateNames', diagnostico });
+    return res.status(400).json({ error: 'Se requiere transcriptionText y templateNames' });
 
   try {
-    const fullSystemPrompt = `${systemPrompt}\n\nLista de plantillas disponibles:\n${JSON.stringify(templateNames)}`;
+    // Filtrar plantillas relevantes según palabras clave de la transcripción
+    // para no enviar las 89 plantillas completas a Groq
+    const textoLower = transcriptionText.toLowerCase();
+    const esTAC = textoLower.includes('tac');
+    const esRM = textoLower.includes(' rm ') || textoLower.includes('resonancia');
 
-    console.log('[parse-transcription] Llamando a Groq...');
+    const plantillasFiltradas = templateNames.filter(nombre => {
+      const n = nombre.toLowerCase();
+      if (esTAC && !esRM) return n.includes('tac');
+      if (esRM && !esTAC) return n.includes('rm') || n.includes('++rm');
+      return true; // si hay ambos o ninguno, enviar todas
+    });
+
+    // Si el filtro dejó muy pocas, usar todas (caso extremo)
+    const plantillasAUsar = plantillasFiltradas.length >= 3
+      ? plantillasFiltradas
+      : templateNames;
+
+    console.log(`[parse-transcription] Plantillas filtradas: ${plantillasAUsar.length} de ${templateNames.length}`);
+
+    const fullSystemPrompt = `${systemPrompt}\n\nPLANTILLAS DISPONIBLES:\n${plantillasAUsar.join('\n')}`;
 
     const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -107,18 +110,16 @@ module.exports.default = async function handler(req, res) {
         tools,
         tool_choice: { type: 'function', function: { name: 'parse_transcription_result' } },
         temperature: 0.1,
-        max_tokens: 8000,
+        max_tokens: 4000,
       }),
     });
 
     const responseText = await groqResponse.text();
-    console.log('[parse-transcription] Groq status:', groqResponse.status);
-    console.log('[parse-transcription] Groq response:', responseText.substring(0, 500));
 
     if (!groqResponse.ok) {
       let errMsg = 'Error al comunicarse con Groq';
       try { errMsg = JSON.parse(responseText).error?.message || errMsg; } catch { errMsg = responseText || errMsg; }
-      return res.status(groqResponse.status).json({ error: errMsg, groq_status: groqResponse.status, groq_response: responseText.substring(0, 300), diagnostico });
+      return res.status(groqResponse.status).json({ error: errMsg });
     }
 
     const aiData = JSON.parse(responseText);
@@ -128,7 +129,7 @@ module.exports.default = async function handler(req, res) {
       const content = aiData.choices?.[0]?.message?.content || '';
       const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || content.match(/(\{[\s\S]*\})/);
       if (!jsonMatch)
-        return res.status(500).json({ error: 'No se pudo parsear la respuesta de Groq', raw: content.substring(0, 300), diagnostico });
+        return res.status(500).json({ error: 'No se pudo parsear la respuesta de Groq' });
       return res.status(200).json(JSON.parse(jsonMatch[1] || jsonMatch[0]));
     }
 
@@ -138,8 +139,7 @@ module.exports.default = async function handler(req, res) {
 
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    const stack = error instanceof Error ? error.stack : '';
-    console.error('[parse-transcription] EXCEPCIÓN:', msg);
-    return res.status(500).json({ error: msg, stack: stack.substring(0, 500), diagnostico });
+    console.error('[parse-transcription] Error:', msg);
+    return res.status(500).json({ error: msg });
   }
 };

@@ -2,32 +2,51 @@ module.exports.config = {
   api: { bodyParser: { sizeLimit: '2mb' } },
 };
 
-const systemPrompt = `Eres un parser de transcripciones médicas de radiología. Extrae cada estudio y devuelve JSON via tool call.
+// Prompt mínimo para modo manual — solo extrae estudios sin buscar plantillas
+const systemPromptManual = `Eres un parser de transcripciones médicas. Extrae TODOS los estudios del texto y devuelve JSON via tool call.
 
-CAMPOS por estudio:
-- nombre_paciente: nombre completo del paciente
+Por cada estudio identifica:
+- nombre_paciente: nombre completo
 - tipo_estudio: TAC o RM
 - region: región anatómica
 - lateralidad: "derecha"/"izquierda"/"bilateral" o null
 - es_contrastado: true/false
-- datos_clinicos: solo texto de "indicación"/"diagnóstico"/"datos clínicos", o ""
-- conclusiones: solo texto de "conclusiones"/"conclusión"/"impresión diagnóstica", o ""
-- hallazgos: TODO lo demás que no sea conclusiones ni datos_clinicos
+- datos_clinicos: texto de "indicación"/"diagnóstico"/"datos clínicos", o ""
+- conclusiones: texto de "conclusiones"/"conclusión"/"impresión diagnóstica", o ""
+- hallazgos: TODO el resto del texto descriptivo que no sea conclusiones ni datos_clinicos
+- plantilla_match: null (el usuario la seleccionará manualmente)
+- nombre_archivo_sugerido: nombre_paciente + tipo_estudio + region
+
+IMPORTANTE: Extrae ABSOLUTAMENTE TODOS los estudios del texto sin excepción.
+Campos sin contenido → cadena vacía "", nunca "null" como texto.`;
+
+// Prompt completo para modo automático — incluye plantillas
+const systemPromptAuto = `Eres un parser de transcripciones médicas de radiología. Extrae TODOS los estudios y devuelve JSON via tool call.
+
+Por cada estudio identifica:
+- nombre_paciente: nombre completo
+- tipo_estudio: TAC o RM
+- region: región anatómica
+- lateralidad: "derecha"/"izquierda"/"bilateral" o null
+- es_contrastado: true/false
+- datos_clinicos: texto de "indicación"/"diagnóstico"/"datos clínicos", o ""
+- conclusiones: texto de "conclusiones"/"conclusión"/"impresión diagnóstica", o ""
+- hallazgos: TODO el resto del texto descriptivo que no sea conclusiones ni datos_clinicos
 - plantilla_match: nombre exacto de la plantilla de la lista, o null
-- nombre_archivo_sugerido: nombre_paciente + plantilla + región + lateralidad
+- nombre_archivo_sugerido: nombre_paciente + plantilla + region + lateralidad
 
 REGLAS DE PLANTILLA:
 1. TAC → solo plantillas con "TAC". RM → solo plantillas con "RM". NUNCA mezclar.
 2. TAC de hombro/tobillo/mano/pie/cadera/pierna/brazo/rodilla → plantilla con "musculoesquelético".
 3. TAC abdomen/tórax/toracoabdominal sin "simple" → usar plantilla contrastada.
-4. RM hombro: "ruptura parcial"→plantilla con "parcial"; "ruptura completa"→"completa"; sin ruptura→"tendinosis".
+4. RM hombro: "ruptura parcial"→"parcial"; "ruptura completa"→"completa"; sin ruptura→"tendinosis".
 5. Campos sin contenido → cadena vacía "", nunca "null" como texto.`;
 
 const tools = [{
   type: 'function',
   function: {
     name: 'parse_transcription_result',
-    description: 'Return parsed studies',
+    description: 'Return ALL parsed studies from the transcription',
     parameters: {
       type: 'object',
       properties: {
@@ -71,29 +90,37 @@ module.exports.default = async function handler(req, res) {
   if (!GROQ_API_KEY)
     return res.status(500).json({ error: 'GROQ_API_KEY no configurado' });
 
-  const { transcriptionText, templateNames } = req.body || {};
+  const { transcriptionText, templateNames, modoManual } = req.body || {};
   if (!transcriptionText)
     return res.status(400).json({ error: 'Se requiere transcriptionText' });
 
   try {
-    const textoLower = transcriptionText.toLowerCase();
-    const esTAC = textoLower.includes('tac');
-    const esRM = textoLower.includes(' rm ') || textoLower.includes('resonancia');
+    let systemFinal;
 
-    const plantillasFiltradas = (templateNames || []).filter(nombre => {
-      const n = nombre.toLowerCase();
-      if (esTAC && !esRM) return n.includes('tac');
-      if (esRM && !esTAC) return n.includes('rm') || n.includes('++rm');
-      return true;
-    });
+    if (modoManual) {
+      // Modo manual: prompt mínimo sin plantillas — máximo ahorro de tokens
+      systemFinal = systemPromptManual;
+      console.log('[parse-transcription] Modo manual — sin plantillas');
+    } else {
+      // Modo automático: filtrar plantillas por modalidad
+      const textoLower = transcriptionText.toLowerCase();
+      const esTAC = textoLower.includes('tac');
+      const esRM = textoLower.includes(' rm ') || textoLower.includes('resonancia');
 
-    const plantillasAUsar = plantillasFiltradas.length >= 3
-      ? plantillasFiltradas
-      : (templateNames || []);
+      const plantillasFiltradas = (templateNames || []).filter(nombre => {
+        const n = nombre.toLowerCase();
+        if (esTAC && !esRM) return n.includes('tac');
+        if (esRM && !esTAC) return n.includes('rm') || n.includes('++rm');
+        return true;
+      });
 
-    console.log(`[parse-transcription] Plantillas: ${plantillasAUsar.length} de ${(templateNames||[]).length}`);
+      const plantillasAUsar = plantillasFiltradas.length >= 3
+        ? plantillasFiltradas
+        : (templateNames || []);
 
-    const fullSystemPrompt = `${systemPrompt}\n\nPLANTILLAS DISPONIBLES:\n${plantillasAUsar.join('\n')}`;
+      console.log(`[parse-transcription] Modo auto — ${plantillasAUsar.length} plantillas de ${(templateNames||[]).length}`);
+      systemFinal = `${systemPromptAuto}\n\nPLANTILLAS DISPONIBLES:\n${plantillasAUsar.join('\n')}`;
+    }
 
     const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -101,13 +128,13 @@ module.exports.default = async function handler(req, res) {
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
         messages: [
-          { role: 'system', content: fullSystemPrompt },
+          { role: 'system', content: systemFinal },
           { role: 'user', content: transcriptionText },
         ],
         tools,
         tool_choice: { type: 'function', function: { name: 'parse_transcription_result' } },
         temperature: 0.1,
-        max_tokens: 4000,
+        max_tokens: modoManual ? 8000 : 4000,
       }),
     });
 
@@ -131,7 +158,7 @@ module.exports.default = async function handler(req, res) {
     }
 
     const parsed = JSON.parse(toolCall.function.arguments);
-    console.log(`[parse-transcription] ✅ ${parsed.estudios?.length || 0} estudios`);
+    console.log(`[parse-transcription] ✅ ${parsed.estudios?.length || 0} estudios detectados`);
     return res.status(200).json(parsed);
 
   } catch (error) {

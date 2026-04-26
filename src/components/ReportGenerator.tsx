@@ -220,12 +220,12 @@ export function ReportGenerator({
   const [seleccionManual, setSeleccionManual] = useState<Record<number, string>>({});
 
   // ── Parsear transcripción (común a ambos modos) ────────────────────────────
-  const parsearTranscripcion = async (): Promise<ParsedStudy[]> => {
-    const templateNames = plantillas.map(p => p.nombre);
+  const parsearTranscripcion = async (modoManual: boolean = false): Promise<ParsedStudy[]> => {
+    const templateNames = modoManual ? [] : plantillas.map(p => p.nombre);
     const response = await fetch('/api/parse-transcription', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcriptionText: textoFinal, templateNames }),
+      body: JSON.stringify({ transcriptionText: textoFinal, templateNames, modoManual }),
     });
     if (!response.ok) {
       const err = await response.json();

@@ -89,7 +89,7 @@ module.exports.default = async function handler(req, res) {
     const mimeType = mimeMap[fileExt] || 'audio/mpeg';
 
     const { body, contentType } = buildMultipartBody(
-      { model: 'whisper-large-v3-turbo', response_format: 'json', language: 'es' },
+      { model: 'whisper-large-v3', response_format: 'json', language: 'es' },
       [{ name: 'file', filename: `audio.${fileExt}`, contentType: mimeType, data: audioBuffer }]
     );
 

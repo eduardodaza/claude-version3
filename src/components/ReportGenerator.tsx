@@ -323,7 +323,7 @@ export function ReportGenerator({
     setSeleccionManual({});
 
     try {
-      const studies = await parsearTranscripcion();
+      const studies = await parsearTranscripcion(true);
       if (studies.length === 0) {
         toast.error('No se identificaron estudios en la transcripción');
         setStep('idle');

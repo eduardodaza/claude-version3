@@ -35,7 +35,7 @@ Por cada estudio identifica:
 - conclusiones: texto de "conclusiones"/"conclusión"/"impresión diagnóstica", o ""
 - hallazgos: TODO el resto del texto descriptivo que no sea conclusiones ni datos_clinicos
 - plantilla_match: nombre exacto de la plantilla de la lista, o null
-- nombre_archivo_sugerido: nombre_paciente + plantilla + region + lateralidad
+- nombre_archivo_sugerido: nombre_paciente + tipo_estudio + region + lateralidad. SIEMPRE incluye la lateralidad en el nombre cuando existe, es obligatorio para diferenciar estudios del mismo paciente.
 
 REGLAS DE PLANTILLA:
 1. TAC → solo plantillas con "TAC". RM → solo plantillas con "RM". NUNCA mezclar.

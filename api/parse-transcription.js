@@ -18,6 +18,8 @@ Por cada estudio identifica:
 - nombre_archivo_sugerido: nombre_paciente + tipo_estudio + region
 
 IMPORTANTE: Extrae ABSOLUTAMENTE TODOS los estudios del texto sin excepción.
+REGLA ESTUDIOS BILATERALES: Si el médico dicta el mismo tipo de estudio para lado derecho e izquierdo por separado, debes crear DOS estudios separados, uno por cada lado. Nunca los fusiones en uno solo.
+REGLA CONTENIDO COMPLETO: Incluye en "hallazgos" absolutamente todo el texto descriptivo dictado para ese estudio, sin omitir ninguna palabra. Es obligatorio que el campo hallazgos sea completo y fiel al dictado.
 Campos sin contenido → cadena vacía "", nunca "null" como texto.`;
 
 // Prompt completo para modo automático — incluye plantillas
@@ -40,6 +42,8 @@ REGLAS DE PLANTILLA:
 2. TAC de hombro/tobillo/mano/pie/cadera/pierna/brazo/rodilla → plantilla con "musculoesquelético".
 3. TAC abdomen/tórax/toracoabdominal sin "simple" → usar plantilla contrastada.
 4. RM hombro: "ruptura parcial"→"parcial"; "ruptura completa"→"completa"; sin ruptura→"tendinosis".
+REGLA ESTUDIOS BILATERALES: Si el médico dicta el mismo tipo de estudio para lado derecho e izquierdo por separado, debes crear DOS estudios separados, uno por cada lado. Nunca los fusiones en uno solo.
+REGLA CONTENIDO COMPLETO: Incluye en "hallazgos" absolutamente todo el texto descriptivo dictado para ese estudio, sin omitir ninguna palabra. Es obligatorio que el campo hallazgos sea completo y fiel al dictado.
 5. Campos sin contenido → cadena vacía "", nunca "null" como texto.`;
 
 const tools = [{

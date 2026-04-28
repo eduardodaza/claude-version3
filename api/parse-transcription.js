@@ -13,7 +13,7 @@ Por cada estudio identifica:
 - es_contrastado: true/false
 - datos_clinicos: texto de "indicación"/"diagnóstico"/"datos clínicos", o ""
 - conclusiones: texto de "conclusiones"/"conclusión"/"impresión diagnóstica", o ""
-- hallazgos: TODO el resto del texto descriptivo que no sea conclusiones ni datos_clinicos
+- hallazgos: Copia TEXTUALMENTE y de forma COMPLETA absolutamente todo el texto dictado que no sea conclusiones ni datos_clinicos. No resumas, no omitas, no parafrasees ninguna palabra. El campo hallazgos debe ser una copia fiel y completa del dictado original.
 - plantilla_match: null (el usuario la seleccionará manualmente)
 - nombre_archivo_sugerido: nombre_paciente + tipo_estudio + region
 
@@ -21,6 +21,8 @@ IMPORTANTE: Extrae ABSOLUTAMENTE TODOS los estudios del texto sin excepción.
 REGLA ESTUDIOS BILATERALES: Si el médico dicta el mismo tipo de estudio para lado derecho e izquierdo por separado, debes crear DOS estudios separados, uno por cada lado. Nunca los fusiones en uno solo.
 REGLA CONTENIDO COMPLETO: Incluye en "hallazgos" absolutamente todo el texto descriptivo dictado para ese estudio, sin omitir ninguna palabra. Es obligatorio que el campo hallazgos sea completo y fiel al dictado.
 Campos sin contenido → cadena vacía "", nunca "null" como texto.`;
+REGLA CRÍTICA DE CONTENIDO COMPLETO: Es absolutamente prohibido omitir, resumir o parafrasear cualquier parte del dictado. Todo el texto original debe aparecer distribuido entre hallazgos, conclusiones y datos_clinicos sin que se pierda ni una sola palabra.
+REGLA DE NOMBRE DE ARCHIVO: En nombre_archivo_sugerido NO incluyas la lateralidad si ya está incluida en la región. Por ejemplo si region es "hombro derecho" el nombre debe ser "Paciente RM hombro derecho", no "Paciente RM hombro derecho derecho".
 
 // Prompt completo para modo automático — incluye plantillas
 const systemPromptAuto = `Eres un parser de transcripciones médicas de radiología. Extrae TODOS los estudios y devuelve JSON via tool call.
@@ -33,7 +35,7 @@ Por cada estudio identifica:
 - es_contrastado: true/false
 - datos_clinicos: texto de "indicación"/"diagnóstico"/"datos clínicos", o ""
 - conclusiones: texto de "conclusiones"/"conclusión"/"impresión diagnóstica", o ""
-- hallazgos: TODO el resto del texto descriptivo que no sea conclusiones ni datos_clinicos
+- hallazgos: Copia TEXTUALMENTE y de forma COMPLETA absolutamente todo el texto dictado que no sea conclusiones ni datos_clinicos. No resumas, no omitas, no parafrasees ninguna palabra. El campo hallazgos debe ser una copia fiel y completa del dictado original.
 - plantilla_match: nombre exacto de la plantilla de la lista, o null
 - nombre_archivo_sugerido: nombre_paciente + tipo_estudio + region + lateralidad. SIEMPRE incluye la lateralidad en el nombre cuando existe, es obligatorio para diferenciar estudios del mismo paciente.
 
@@ -45,6 +47,8 @@ REGLAS DE PLANTILLA:
 REGLA ESTUDIOS BILATERALES: Si el médico dicta el mismo tipo de estudio para lado derecho e izquierdo por separado, debes crear DOS estudios separados, uno por cada lado. Nunca los fusiones en uno solo.
 REGLA CONTENIDO COMPLETO: Incluye en "hallazgos" absolutamente todo el texto descriptivo dictado para ese estudio, sin omitir ninguna palabra. Es obligatorio que el campo hallazgos sea completo y fiel al dictado.
 5. Campos sin contenido → cadena vacía "", nunca "null" como texto.`;
+REGLA CRÍTICA DE CONTENIDO COMPLETO: Es absolutamente prohibido omitir, resumir o parafrasear cualquier parte del dictado. Todo el texto original debe aparecer distribuido entre hallazgos, conclusiones y datos_clinicos sin que se pierda ni una sola palabra.
+REGLA DE NOMBRE DE ARCHIVO: En nombre_archivo_sugerido NO incluyas la lateralidad si ya está incluida en la región. Por ejemplo si region es "hombro derecho" el nombre debe ser "Paciente RM hombro derecho", no "Paciente RM hombro derecho derecho".
 
 const tools = [{
   type: 'function',

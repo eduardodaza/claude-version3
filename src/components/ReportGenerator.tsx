@@ -249,7 +249,7 @@ export function ReportGenerator({
       return {
         study: { ...study, plantilla_match: plantillaMatchFinal },
         blob: null,
-       fileName: `${study.nombre_archivo_sugerido || study.nombre_paciente}${study.lateralidad ? ` ${study.lateralidad}` : ''}_${i + 1}.docx`,
+       fileName: `${study.nombre_archivo_sugerido || study.nombre_paciente}_${i + 1}.docx`,
         status: plantillaMatchFinal ? 'pending' as const : 'error' as const,
         error: plantillaMatchFinal ? undefined : 'No se encontró plantilla correspondiente',
       };

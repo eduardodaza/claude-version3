@@ -463,11 +463,11 @@ export function ReportGenerator({
 
       {/* ── MODO MANUAL: cajones de selección por estudio ── */}
       {step === 'manual-select' && (
-        <div className="space-y-3">
+  <div className="space-y-3 flex flex-col">
           <p className="text-sm font-medium text-foreground">
             Se detectaron {estudiosManual.length} estudio{estudiosManual.length !== 1 ? 's' : ''}. Selecciona la plantilla para cada uno:
           </p>
-          <ScrollArea className="max-h-[320px]">
+          <ScrollArea className="h-[400px] overflow-y-auto">
             <div className="space-y-2 pr-3">
               {estudiosManual.map((study, i) => (
                 <ManualStudyRow

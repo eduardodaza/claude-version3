@@ -42,6 +42,7 @@ REGLAS DE PLANTILLA:
 3. TAC abdomen/tórax/toracoabdominal sin "simple" → usar plantilla contrastada.
 4. RM hombro: "ruptura parcial"→"parcial"; "ruptura completa"→"completa"; sin ruptura→"tendinosis".
 5. Campos sin contenido → cadena vacía "", nunca "null" como texto.
+REGLA DE PLANTILLAS ++: Algunas plantillas tienen el prefijo "++" (ejemplo: "++RM hombro tendinosis") y otras no (ejemplo: "RM hombro tendinosis"). Primero intenta encontrar la plantilla CON el prefijo "++". Si no existe en la lista con "++", entonces usa la misma plantilla SIN el prefijo "++". Nunca inventes nombres que no estén en la lista.
 REGLA ESTUDIOS BILATERALES: Si el médico dicta el mismo tipo de estudio para lado derecho e izquierdo por separado, crea DOS estudios separados, uno por cada lado. Nunca los fusiones en uno solo.
 REGLA CONTENIDO COMPLETO: Es absolutamente prohibido omitir, resumir o parafrasear cualquier parte del dictado. Todo el texto original debe aparecer distribuido entre hallazgos, conclusiones y datos_clinicos sin que se pierda ni una sola palabra.
 REGLA DE NOMBRE DE ARCHIVO: En nombre_archivo_sugerido NO repitas la lateralidad. Si region ya dice "hombro derecho", el nombre debe ser "Paciente RM hombro derecho", nunca "Paciente RM hombro derecho derecho".`;

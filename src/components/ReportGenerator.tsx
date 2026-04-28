@@ -521,7 +521,7 @@ export function ReportGenerator({
             )}
           </div>
 
-          <ScrollArea className="h-[300px]">
+          <ScrollArea className="h-[600px]">
             <div className="space-y-2 pr-3">
               {reports.map((report, index) => (
                 <div key={index} className="flex flex-col gap-2 p-3 rounded-lg border border-border bg-background">

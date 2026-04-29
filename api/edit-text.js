@@ -3,15 +3,10 @@ module.exports.config = {
 };
 
 const SYSTEM_PROMPT = `Actúas únicamente sobre el texto proporcionado por el usuario.
-No inventes información.
-No agregues hechos no presentes en el texto original.
+No inventes información ni agregues hechos no presentes en el texto original.
 Limítate estrictamente a las instrucciones del usuario.
-Si el usuario pide corregir ortografía, solo corrige ortografía.
-Si el usuario pide reorganizar, solo reorganiza.
-Si el usuario pide resumir, resume sin agregar contenido nuevo.
-REGLA CRÍTICA SOBRE NEGRITA: Solo aplica negrita (etiquetas <b></b>) cuando el usuario lo pida EXPLÍCITAMENTE. NUNCA pongas en negrita texto por tu cuenta. No pongas en negrita números romanos, títulos, subtítulos ni ningún otro elemento a menos que el usuario lo solicite.
-Si el texto ya contiene etiquetas <b> existentes, presérvalas sin modificar.
-Responde SOLO con el texto modificado, sin explicaciones adicionales.`;
+REGLA NEGRITA: Solo aplica negrita (<b></b>) cuando el usuario lo pida explícitamente. Preserva etiquetas <b> existentes.
+Responde SOLO con el texto modificado, sin explicaciones.`;
 
 module.exports.default = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -29,41 +24,36 @@ module.exports.default = async function handler(req, res) {
   if (!text || !instruction)
     return res.status(400).json({ error: 'text e instruction son requeridos' });
 
-  console.log(`[edit-text] Instrucción: "${instruction.substring(0, 80)}"`);
-
   try {
     const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_API_KEY}` },
       body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
+        model: 'llama-3.3-70b-versatile',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: `TEXTO A MODIFICAR:\n\n${text}\n\nINSTRUCCIÓN:\n${instruction}` },
+          { role: 'user', content: `TEXTO:\n\n${text}\n\nINSTRUCCIÓN:\n${instruction}` },
         ],
         temperature: 0.3,
-        max_tokens: 3000,
+        max_tokens: 2000,
       }),
     });
 
     const responseText = await groqResponse.text();
 
     if (!groqResponse.ok) {
-      console.error('[edit-text] Groq error:', groqResponse.status, responseText);
       if (groqResponse.status === 429)
-        return res.status(429).json({ error: 'Rate limit excedido, intenta de nuevo.' });
+        return res.status(429).json({ error: 'Límite de tokens alcanzado, espera 60 segundos e intenta de nuevo.' });
       return res.status(500).json({ error: 'Error al editar con Groq', detalle: responseText });
     }
 
     const result = JSON.parse(responseText);
     const editedText = (result.choices?.[0]?.message?.content || '').trim();
 
-    console.log('[edit-text] ✅ Éxito');
     return res.status(200).json({ success: true, editedText });
 
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    console.error('[edit-text] Error:', msg);
     return res.status(500).json({ error: msg });
   }
 };

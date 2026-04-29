@@ -56,8 +56,9 @@ module.exports.default = async function handler(req, res) {
       const errText = await groqResponse.text();
       console.error('[edit-text] Groq error:', groqResponse.status, errText);
       if (groqResponse.status === 429)
-        return res.status(429).json({ error: 'Rate limit excedido, intenta de nuevo.' });
-      return res.status(500).json({ error: 'Error al editar con Groq' });
+  return res.status(429).json({ error: 'Rate limit excedido, intenta de nuevo.' });
+const errDetalle = await groqResponse.text();
+return res.status(500).json({ error: 'Error al editar con Groq', detalle: errDetalle, status: groqResponse.status });
     }
 
     const result = await groqResponse.json();

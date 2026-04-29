@@ -2,50 +2,36 @@ module.exports.config = {
   api: { bodyParser: { sizeLimit: '2mb' } },
 };
 
-const systemPromptManual = `Eres un parser de transcripciones médicas. Extrae TODOS los estudios del texto y devuelve JSON via tool call.
+const systemPromptManual = `Parser de transcripciones radiológicas. Extrae TODOS los estudios via tool call.
 
-Por cada estudio identifica:
-- nombre_paciente: nombre completo
-- tipo_estudio: TAC o RM
-- region: región anatómica
-- lateralidad: "derecha"/"izquierda"/"bilateral" o null
-- es_contrastado: true/false
-- datos_clinicos: texto de "indicación"/"diagnóstico"/"datos clínicos", o ""
-- conclusiones: texto de "conclusiones"/"conclusión"/"impresión diagnóstica", o ""
-- hallazgos: Copia TEXTUALMENTE y de forma COMPLETA absolutamente todo el texto dictado que no sea conclusiones ni datos_clinicos. No resumas, no omitas, no parafrasees ninguna palabra. El campo hallazgos debe ser una copia fiel y completa del dictado original.
-- plantilla_match: null (el usuario la seleccionará manualmente)
-- nombre_archivo_sugerido: nombre_paciente + tipo_estudio + region. NO repitas la lateralidad si ya está incluida en la región.
+Campos por estudio:
+- nombre_paciente, tipo_estudio(TAC o RM), region, lateralidad("derecha"/"izquierda"/"bilateral" o null), es_contrastado(true/false)
+- datos_clinicos: solo texto de indicación/diagnóstico, o ""
+- conclusiones: solo texto de conclusiones/impresión diagnóstica, o ""
+- hallazgos: copia TEXTUAL y COMPLETA de todo lo demás sin omitir ni resumir nada
+- plantilla_match: null
+- nombre_archivo_sugerido: nombre_paciente + tipo_estudio + region (NO repetir lateralidad si ya está en region)
 
-IMPORTANTE: Extrae ABSOLUTAMENTE TODOS los estudios del texto sin excepción.
-REGLA ESTUDIOS BILATERALES: Si el médico dicta el mismo tipo de estudio para lado derecho e izquierdo por separado, crea DOS estudios separados, uno por cada lado. Nunca los fusiones en uno solo.
-REGLA CONTENIDO COMPLETO: Es absolutamente prohibido omitir, resumir o parafrasear cualquier parte del dictado. Todo el texto original debe aparecer distribuido entre hallazgos, conclusiones y datos_clinicos sin que se pierda ni una sola palabra.
-REGLA DE NOMBRE DE ARCHIVO: En nombre_archivo_sugerido NO repitas la lateralidad. Si region ya dice "hombro derecho", el nombre debe ser "Paciente RM hombro derecho", nunca "Paciente RM hombro derecho derecho".
-Campos sin contenido → cadena vacía "", nunca "null" como texto.`;
+REGLAS:
+- Estudios bilaterales dictados por separado = DOS estudios separados, nunca fusionar
+- hallazgos debe ser copia fiel del dictado original, sin resumir ni omitir
+- Campos sin contenido = "" nunca la palabra null`;
 
-const systemPromptAuto = `Eres un parser de transcripciones médicas de radiología. Extrae TODOS los estudios y devuelve JSON via tool call.
+const systemPromptAuto = `Parser de transcripciones radiológicas. Extrae TODOS los estudios via tool call.
 
-Por cada estudio identifica:
-- nombre_paciente: nombre completo
-- tipo_estudio: TAC o RM
-- region: región anatómica
-- lateralidad: "derecha"/"izquierda"/"bilateral" o null
-- es_contrastado: true/false
-- datos_clinicos: texto de "indicación"/"diagnóstico"/"datos clínicos", o ""
-- conclusiones: texto de "conclusiones"/"conclusión"/"impresión diagnóstica", o ""
-- hallazgos: Copia TEXTUALMENTE y de forma COMPLETA absolutamente todo el texto dictado que no sea conclusiones ni datos_clinicos. No resumas, no omitas, no parafrasees ninguna palabra. El campo hallazgos debe ser una copia fiel y completa del dictado original.
-- plantilla_match: nombre exacto de la plantilla de la lista, o null
-- nombre_archivo_sugerido: nombre_paciente + tipo_estudio + region. NO repitas la lateralidad si ya está incluida en la región.
+Campos por estudio:
+- nombre_paciente, tipo_estudio(TAC o RM), region, lateralidad("derecha"/"izquierda"/"bilateral" o null), es_contrastado(true/false)
+- datos_clinicos: solo texto de indicación/diagnóstico, o ""
+- conclusiones: solo texto de conclusiones/impresión diagnóstica, o ""
+- hallazgos: copia TEXTUAL y COMPLETA de todo lo demás sin omitir ni resumir nada
+- plantilla_match: nombre exacto de la lista de plantillas disponibles, o null
+- nombre_archivo_sugerido: nombre_paciente + tipo_estudio + region (NO repetir lateralidad si ya está en region)
 
-REGLAS DE PLANTILLA:
-1. TAC → solo plantillas con "TAC". RM → solo plantillas con "RM". NUNCA mezclar.
-2. TAC de hombro/tobillo/mano/pie/cadera/pierna/brazo/rodilla → plantilla con "musculoesquelético".
-3. TAC abdomen/tórax/toracoabdominal sin "simple" → usar plantilla contrastada.
-4. RM hombro: "ruptura parcial"→"parcial"; "ruptura completa"→"completa"; sin ruptura→"tendinosis".
-5. Campos sin contenido → cadena vacía "", nunca "null" como texto.
-REGLA DE PLANTILLAS ++: Algunas plantillas tienen el prefijo "++" (ejemplo: "++RM hombro tendinosis") y otras no (ejemplo: "RM hombro tendinosis"). Primero intenta encontrar la plantilla CON el prefijo "++". Si no existe en la lista con "++", entonces usa la misma plantilla SIN el prefijo "++". Nunca inventes nombres que no estén en la lista.
-REGLA ESTUDIOS BILATERALES: Si el médico dicta el mismo tipo de estudio para lado derecho e izquierdo por separado, crea DOS estudios separados, uno por cada lado. Nunca los fusiones en uno solo.
-REGLA CONTENIDO COMPLETO: Es absolutamente prohibido omitir, resumir o parafrasear cualquier parte del dictado. Todo el texto original debe aparecer distribuido entre hallazgos, conclusiones y datos_clinicos sin que se pierda ni una sola palabra.
-REGLA DE NOMBRE DE ARCHIVO: En nombre_archivo_sugerido NO repitas la lateralidad. Si region ya dice "hombro derecho", el nombre debe ser "Paciente RM hombro derecho", nunca "Paciente RM hombro derecho derecho".`;
+REGLAS:
+- TAC → solo plantillas con "TAC". RM → solo plantillas con "RM" o "++RM". Nunca mezclar.
+- Estudios bilaterales dictados por separado = DOS estudios separados, nunca fusionar
+- hallazgos debe ser copia fiel del dictado original, sin resumir ni omitir
+- Campos sin contenido = "" nunca la palabra null`;
 
 const tools = [{
   type: 'function',

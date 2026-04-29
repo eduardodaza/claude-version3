@@ -1,9 +1,3 @@
-/**
- * Vercel API Route: /api/edit-text
- * CommonJS — compatible con package.json "type":"module" del frontend.
- * Aplica ediciones de texto con instrucciones usando Groq LLM.
- */
-
 module.exports.config = {
   api: { bodyParser: { sizeLimit: '2mb' } },
 };
@@ -35,7 +29,7 @@ module.exports.default = async function handler(req, res) {
   if (!text || !instruction)
     return res.status(400).json({ error: 'text e instruction son requeridos' });
 
-  console.log(`[edit-text] Instrucción: "${instruction.substring(0, 80)}..."`);
+  console.log(`[edit-text] Instrucción: "${instruction.substring(0, 80)}"`);
 
   try {
     const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -66,3 +60,10 @@ module.exports.default = async function handler(req, res) {
 
     console.log('[edit-text] ✅ Éxito');
     return res.status(200).json({ success: true, editedText });
+
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('[edit-text] Error:', msg);
+    return res.status(500).json({ error: msg });
+  }
+};

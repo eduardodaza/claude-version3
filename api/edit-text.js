@@ -36,13 +36,13 @@ module.exports.default = async function handler(req, res) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GROQ_API_KEY}` },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'llama-3.1-8b-instant',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: `TEXTO A MODIFICAR:\n\n${text}\n\nINSTRUCCIÓN:\n${instruction}` },
         ],
         temperature: 0.3,
-        max_tokens: 8000,
+        max_tokens: 3000,
       }),
     });
 

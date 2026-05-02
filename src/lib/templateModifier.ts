@@ -334,9 +334,9 @@ export async function modifyTemplate(templateBlob: Blob, study: StudyData): Prom
         if (isMusculoRegion && !regionAlreadyInTitle) {
           parts.push(study.region.toUpperCase());
         }
-        if (cleanLateralidad) {
-          parts.push(cleanLateralidad);
-        }
+        if (cleanLateralidad && !text.includes(cleanLateralidad.toLowerCase())) {
+  parts.push(cleanLateralidad);
+}
 
         if (parts.length > 0) {
           const suffix = parts.join(' ');

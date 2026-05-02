@@ -88,12 +88,22 @@ module.exports.default = async function handler(req, res) {
     const mimeMap = { mp3:'audio/mpeg', wav:'audio/wav', m4a:'audio/mp4', ogg:'audio/ogg', webm:'audio/webm', flac:'audio/flac' };
     const mimeType = mimeMap[fileExt] || 'audio/mpeg';
 
+    // PROMPT corto y preciso: un prompt largo compite con el audio y causa truncado.
+    // La instrucción de medidas evita que Whisper corte decimales en pausas cortas.
+    const whisperPrompt = 'Informe radiológico médico en español. Medidas siempre completas con decimales, por ejemplo: 4.5 cm, 12.3 mm. Términos: TAC, RM, resonancia magnética, tomografía, parénquima, hepático, esplénico, adenopatía, nódulo, lesión, derrame, pleural, mediastino, retroperitoneo, manguito rotador, menisco, ligamento, disco intervertebral, estenosis, trombosis, contraste, STENT, colecistectomia, bronquiectasias, centrilobulillar.';
+
     const { body, contentType } = buildMultipartBody(
-      { model: 'whisper-large-v3', response_format: 'json', language: 'es', prompt: 'Transcripción de informe radiológico médico en español. Términos médicos: TAC, adenomegalias, Goutallier, RM, omalgia, resonancia magnética, espondiloartrósico, centrilobulillar, bronquiectasias, STENT, parietocólicas, hiliar, vena cava, quiste de Baker, colecistectomia, via biliar intra o extrahepatica, condromixoides, Wiberg, mediastinica, condromalacia, patelar, femorotibial, adelgazamiento, desfibrilacion, tomografía, contraste, parénquima, hepático, esplénico, páncreas, riñón, aorta, retroperitoneo, mediastino, pleural, pericárdico, vertebral, disco intervertebral, menisco, ligamento, tendón, manguito rotador, milímetros, centímetros, lesión, nódulo, masa, quiste, colección, derrame, , trabecular, adenopatía, hernia, estenosis, oclusión, trombosis.' },
+      {
+        model: 'whisper-large-v3',
+        response_format: 'verbose_json',
+        timestamp_granularities: 'segment',
+        language: 'es',
+        prompt: whisperPrompt,
+      },
       [{ name: 'file', filename: `audio.${fileExt}`, contentType: mimeType, data: audioBuffer }]
     );
 
-    console.log(`[transcribe] Enviando ${body.length} bytes a Groq...`);
+    console.log(`[transcribe] Enviando ${body.length} bytes a Groq (verbose_json)...`);
 
     const groqResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
       method: 'POST',
@@ -110,7 +120,17 @@ module.exports.default = async function handler(req, res) {
     }
 
     const groqResult = await groqResponse.json();
-    const textoOriginal = (groqResult.text || '').trim();
+
+    // Reconstruir texto completo desde TODOS los segmentos para evitar truncado silencioso.
+    // Si verbose_json devuelve segments, concatenarlos; si no, usar .text como fallback.
+    let textoOriginal = '';
+    if (groqResult.segments && groqResult.segments.length > 0) {
+      textoOriginal = groqResult.segments.map(s => (s.text || '').trim()).filter(Boolean).join(' ').trim();
+      console.log(`[transcribe] Segmentos: ${groqResult.segments.length} | Chars: ${textoOriginal.length}`);
+    } else {
+      textoOriginal = (groqResult.text || '').trim();
+      console.log(`[transcribe] Sin segmentos, usando .text | Chars: ${textoOriginal.length}`);
+    }
 
     if (!textoOriginal)
       return res.status(500).json({ error: 'Groq no devolvió texto', diagnostico });

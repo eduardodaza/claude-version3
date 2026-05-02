@@ -96,7 +96,6 @@ module.exports.default = async function handler(req, res) {
       {
         model: 'whisper-large-v3',
         response_format: 'verbose_json',
-        timestamp_granularities: 'segment',
         language: 'es',
         prompt: whisperPrompt,
       },

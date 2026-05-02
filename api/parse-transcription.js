@@ -8,14 +8,15 @@ Campos por estudio:
 - nombre_paciente, tipo_estudio(TAC o RM), region, lateralidad("derecha"/"izquierda"/"bilateral" o null), es_contrastado(true/false)
 - datos_clinicos: solo texto de indicación/diagnóstico, o ""
 - conclusiones: solo texto de conclusiones/impresión diagnóstica, o ""
-- hallazgos: copia TEXTUAL y COMPLETA de todo lo demás sin omitir ni resumir nada
+- hallazgos: copia TEXTUAL, LITERAL y COMPLETA de TODO lo dictado, sin resumir, sin omitir ni una sola palabra, sin parafrasear
 - plantilla_match: null
 - nombre_archivo_sugerido: nombre_paciente + tipo_estudio + region (NO repetir lateralidad si ya está en region)
 
 REGLAS:
 - Estudios bilaterales dictados por separado = DOS estudios separados, nunca fusionar
-- hallazgos debe ser copia fiel del dictado original, sin resumir ni omitir
-- Campos sin contenido = "" nunca la palabra null`;
+- hallazgos debe ser transcripción LITERAL del dictado original, palabra por palabra, sin resumir ni omitir NADA
+- Campos sin contenido = "" nunca la palabra null
+- NUNCA comprimas, resumas ni parafrasees el contenido de hallazgos bajo ninguna circunstancia`;
 
 const systemPromptAuto = `Parser de transcripciones radiológicas. Extrae TODOS los estudios via tool call.
 
@@ -23,15 +24,16 @@ Campos por estudio:
 - nombre_paciente, tipo_estudio(TAC o RM), region, lateralidad("derecha"/"izquierda"/"bilateral" o null), es_contrastado(true/false)
 - datos_clinicos: solo texto de indicación/diagnóstico, o ""
 - conclusiones: solo texto de conclusiones/impresión diagnóstica, o ""
-- hallazgos: copia TEXTUAL y COMPLETA de todo lo demás sin omitir ni resumir nada
+- hallazgos: copia TEXTUAL, LITERAL y COMPLETA de TODO lo dictado, sin resumir, sin omitir ni una sola palabra, sin parafrasear
 - plantilla_match: nombre exacto de la lista de plantillas disponibles, o null
 - nombre_archivo_sugerido: nombre_paciente + tipo_estudio + region (NO repetir lateralidad si ya está en region)
 
 REGLAS:
 - TAC → solo plantillas con "TAC". RM → solo plantillas con "RM" o "++RM". Nunca mezclar.
 - Estudios bilaterales dictados por separado = DOS estudios separados, nunca fusionar
-- hallazgos debe ser copia fiel del dictado original, sin resumir ni omitir
-- Campos sin contenido = "" nunca la palabra null`;
+- hallazgos debe ser transcripción LITERAL del dictado original, palabra por palabra, sin resumir ni omitir NADA
+- Campos sin contenido = "" nunca la palabra null
+- NUNCA comprimas, resumas ni parafrasees el contenido de hallazgos bajo ninguna circunstancia`;
 
 function encontrarPlantillaMasCercana(tipoEstudio, region, esContrastado, conclusiones, hallazgos, templateNames) {
   if (!templateNames || templateNames.length === 0) return null;
@@ -204,7 +206,7 @@ module.exports.default = async function handler(req, res) {
         tools,
         tool_choice: { type: 'function', function: { name: 'parse_transcription_result' } },
         temperature: 0.1,
-        max_tokens: modoManual ? 4000 : 2000,
+        max_tokens: 8000,
       }),
     });
 

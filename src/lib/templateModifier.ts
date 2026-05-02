@@ -326,8 +326,12 @@ export async function modifyTemplate(templateBlob: Blob, study: StudyData): Prom
         text.includes('tomografia')
       ) {
         // Check if region already exists in the title to avoid duplication
-        const regionAlreadyInTitle = isMusculoRegion && study.region
-          ? text.includes(study.region.toLowerCase())
+        const regionWords = (study.region || '').toLowerCase()
+          .replace(/derech[ao]/g, '').replace(/izquierd[ao]/g, '')
+          .replace(/bilateral/g, '').trim()
+          .split(/\s+/).filter(w => w.length > 2);
+        const regionAlreadyInTitle = isMusculoRegion && regionWords.length > 0
+          ? regionWords.every(word => text.includes(word))
           : true;
 
         const parts: string[] = [];

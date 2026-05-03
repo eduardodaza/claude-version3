@@ -271,17 +271,22 @@ export function ReportGenerator({
   const [estudiosManual, setEstudiosManual] = useState<ManualStudyState[]>([]);
 
   // ── Parsear transcripción ─────────────────────────────────────────────────
-const parsearTranscripcion = async (modoManual: boolean = false): Promise<ParsedStudy[]> => {
+  const parsearTranscripcion = async (modoManual: boolean = false): Promise<ParsedStudy[]> => {
     const templateNames = modoManual ? [] : plantillas.map(p => p.nombre);
 
-    // Detectar si hay múltiples bloques separados por --- nombre ---
-    const bloques = textoFinal
-      .split(/^---[^-].*?---$/m)
-      .map(b => b.trim())
-      .filter(b => b.length > 0);
+    // Dividir por separadores --- cualquier texto --- (líneas que contienen ---)
+    const tieneSeparadores = /---[^\n]+---/.test(textoFinal);
 
-    // Si hay más de un bloque, procesar cada uno por separado
-    const textos = bloques.length > 1 ? bloques : [textoFinal];
+    let textos: string[];
+
+    if (tieneSeparadores) {
+      textos = textoFinal
+        .split(/---[^\n]+---/)
+        .map(b => b.trim())
+        .filter(b => b.length > 30);
+    } else {
+      textos = [textoFinal];
+    }
 
     const todosEstudios: ParsedStudy[] = [];
     const todosSinMatch: string[] = [];

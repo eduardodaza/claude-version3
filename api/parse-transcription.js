@@ -14,7 +14,8 @@ Campos por estudio:
 
 REGLAS:
 - Extraer TODOS los estudios sin excepción
-- hallazgos = texto literal del dictado, sin resumir
+- hallazgos = texto literal del dictado, sin resumir ni interpretar
+- Incluir SIEMPRE en hallazgos: contenido entre paréntesis, análisis comparativo con estudios previos, tipo de tesla utilizado
 - Campos vacíos = "" nunca null`;
 
 const systemPromptAuto = `Parser de transcripciones radiológicas. Extrae TODOS los estudios via tool call.
@@ -30,7 +31,8 @@ Campos por estudio:
 REGLAS:
 - Extraer TODOS los estudios sin excepción
 - TAC → solo plantillas con "TAC". RM → solo plantillas con "RM" o "++RM". Nunca mezclar.
-- hallazgos = texto literal del dictado, sin resumir
+- hallazgos = texto literal del dictado, sin resumir ni interpretar
+- Incluir SIEMPRE en hallazgos: contenido entre paréntesis, análisis comparativo con estudios previos, tipo de tesla utilizado
 - Campos vacíos = "" nunca null`;
 
 function encontrarPlantillaMasCercana(tipoEstudio, region, esContrastado, conclusiones, hallazgos, templateNames) {

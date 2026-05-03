@@ -368,10 +368,10 @@ export async function modifyTemplate(templateBlob: Blob, study: StudyData): Prom
     replaceSectionContent(body, doc, DATOS_KW, cleanDatos);
   }
 
-  // 4. Replace conclusiones section (replace with transcription conclusions, BOLD)
+ // 4. Replace conclusiones section (replace with transcription conclusions, BOLD + UPPERCASE)
   const cleanConclusiones = clean(study.conclusiones);
   if (cleanConclusiones) {
-    replaceSectionContent(body, doc, CONCLUSIONES_KW, cleanConclusiones, true);
+    replaceSectionContent(body, doc, CONCLUSIONES_KW, cleanConclusiones.toUpperCase(), true);
   }
 
   // 5. Hallazgos: INSERT new content BEFORE existing template content (preserve original)

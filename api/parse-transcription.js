@@ -6,34 +6,32 @@ const systemPromptManual = `Parser de transcripciones radiológicas. Extrae TODO
 
 Campos por estudio:
 - nombre_paciente, tipo_estudio(TAC o RM), region, lateralidad("derecha"/"izquierda"/"bilateral" o null), es_contrastado(true/false)
-- datos_clinicos: solo texto de indicación/diagnóstico, o ""
-- conclusiones: solo texto de conclusiones/impresión diagnóstica, o ""
-- hallazgos: copia TEXTUAL, LITERAL y COMPLETA de TODO lo dictado, sin resumir, sin omitir ni una sola palabra, sin parafrasear
+- datos_clinicos: indicación/diagnóstico, o ""
+- conclusiones: conclusiones/impresión diagnóstica, o ""
+- hallazgos: copia literal y completa de todo lo demás, sin omitir nada
 - plantilla_match: null
-- nombre_archivo_sugerido: nombre_paciente + tipo_estudio + region (NO repetir lateralidad si ya está en region)
+- nombre_archivo_sugerido: nombre_paciente + tipo_estudio + region
 
 REGLAS:
-- Estudios bilaterales dictados por separado = DOS estudios separados, nunca fusionar
-- hallazgos debe ser transcripción LITERAL del dictado original, palabra por palabra, sin resumir ni omitir NADA
-- Campos sin contenido = "" nunca la palabra null
-- NUNCA comprimas, resumas ni parafrasees el contenido de hallazgos bajo ninguna circunstancia`;
+- Extraer TODOS los estudios sin excepción
+- hallazgos = texto literal del dictado, sin resumir
+- Campos vacíos = "" nunca null`;
 
 const systemPromptAuto = `Parser de transcripciones radiológicas. Extrae TODOS los estudios via tool call.
 
 Campos por estudio:
 - nombre_paciente, tipo_estudio(TAC o RM), region, lateralidad("derecha"/"izquierda"/"bilateral" o null), es_contrastado(true/false)
-- datos_clinicos: solo texto de indicación/diagnóstico, o ""
-- conclusiones: solo texto de conclusiones/impresión diagnóstica, o ""
-- hallazgos: copia TEXTUAL, LITERAL y COMPLETA de TODO lo dictado, sin resumir, sin omitir ni una sola palabra, sin parafrasear
+- datos_clinicos: indicación/diagnóstico, o ""
+- conclusiones: conclusiones/impresión diagnóstica, o ""
+- hallazgos: copia literal y completa de todo lo demás, sin omitir nada
 - plantilla_match: nombre exacto de la lista de plantillas disponibles, o null
-- nombre_archivo_sugerido: nombre_paciente + tipo_estudio + region (NO repetir lateralidad si ya está en region)
+- nombre_archivo_sugerido: nombre_paciente + tipo_estudio + region
 
 REGLAS:
+- Extraer TODOS los estudios sin excepción
 - TAC → solo plantillas con "TAC". RM → solo plantillas con "RM" o "++RM". Nunca mezclar.
-- Estudios bilaterales dictados por separado = DOS estudios separados, nunca fusionar
-- hallazgos debe ser transcripción LITERAL del dictado original, palabra por palabra, sin resumir ni omitir NADA
-- Campos sin contenido = "" nunca la palabra null
-- NUNCA comprimas, resumas ni parafrasees el contenido de hallazgos bajo ninguna circunstancia`;
+- hallazgos = texto literal del dictado, sin resumir
+- Campos vacíos = "" nunca null`;
 
 function encontrarPlantillaMasCercana(tipoEstudio, region, esContrastado, conclusiones, hallazgos, templateNames) {
   if (!templateNames || templateNames.length === 0) return null;

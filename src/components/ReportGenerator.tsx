@@ -271,20 +271,38 @@ export function ReportGenerator({
   const [estudiosManual, setEstudiosManual] = useState<ManualStudyState[]>([]);
 
   // ── Parsear transcripción ─────────────────────────────────────────────────
-  const parsearTranscripcion = async (modoManual: boolean = false): Promise<ParsedStudy[]> => {
+const parsearTranscripcion = async (modoManual: boolean = false): Promise<ParsedStudy[]> => {
     const templateNames = modoManual ? [] : plantillas.map(p => p.nombre);
-    const response = await fetch('/api/parse-transcription', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcriptionText: textoFinal, templateNames, modoManual }),
-    });
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || 'Error al analizar la transcripción');
+
+    // Detectar si hay múltiples bloques separados por --- nombre ---
+    const bloques = textoFinal
+      .split(/^---[^-].*?---$/m)
+      .map(b => b.trim())
+      .filter(b => b.length > 0);
+
+    // Si hay más de un bloque, procesar cada uno por separado
+    const textos = bloques.length > 1 ? bloques : [textoFinal];
+
+    const todosEstudios: ParsedStudy[] = [];
+    const todosSinMatch: string[] = [];
+
+    for (const texto of textos) {
+      const response = await fetch('/api/parse-transcription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcriptionText: texto, templateNames, modoManual }),
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Error al analizar la transcripción');
+      }
+      const parsed = await response.json();
+      todosEstudios.push(...(parsed.estudios || []));
+      todosSinMatch.push(...(parsed.estudios_sin_match || []));
     }
-    const parsed = await response.json();
-    setUnmatchedStudies(parsed.estudios_sin_match || []);
-    return parsed.estudios || [];
+
+    setUnmatchedStudies(todosSinMatch);
+    return todosEstudios;
   };
 
   // ── Generar documentos (modo auto) ────────────────────────────────────────

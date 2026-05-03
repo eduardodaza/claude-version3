@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { FileText, Download, Loader2, PackageOpen, AlertTriangle, RefreshCw, Search, ListPlus, Zap, Hand } from 'lucide-react';
+import { FileText, Download, Loader2, PackageOpen, AlertTriangle, RefreshCw, Search, ListPlus, Zap, Hand, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -31,6 +31,16 @@ interface GeneratedReport {
   error?: string;
   manualPlantillaId?: string;
   isRetrying?: boolean;
+}
+
+// Estado por estudio en modo manual
+interface ManualStudyState {
+  study: ParsedStudy;
+  plantillaId: string | undefined;
+  status: 'idle' | 'generating' | 'done' | 'error';
+  blob: Blob | null;
+  fileName: string;
+  error?: string;
 }
 
 interface ReportGeneratorProps {
@@ -94,11 +104,7 @@ function TemplatePicker({
                 <button
                   key={p.id}
                   className={`w-full text-left text-xs px-2 py-1.5 rounded hover:bg-accent transition-colors ${p.id === selectedId ? 'bg-accent font-medium' : ''}`}
-                  onClick={() => {
-                    onSelect(p.id);
-                    setOpen(false);
-                    setSearch('');
-                  }}
+                  onClick={() => { onSelect(p.id); setOpen(false); setSearch(''); }}
                 >
                   {p.nombre}
                 </button>
@@ -121,18 +127,21 @@ function TemplatePicker({
   );
 }
 
-// ─── ManualStudyRow ────────────────────────────────────────────────────────────
-// Fila para modo manual: muestra el estudio detectado y el cajón de selección
+// ─── ManualStudyRow (nuevo: con botón Generar individual y estado propio) ──────
 function ManualStudyRow({
-  study,
+  item,
+  index,
   plantillas,
-  selectedId,
-  onSelect,
+  onSelectPlantilla,
+  onGenerar,
+  onDownload,
 }: {
-  study: ParsedStudy;
+  item: ManualStudyState;
+  index: number;
   plantillas: Plantilla[];
-  selectedId?: string;
-  onSelect: (id: string) => void;
+  onSelectPlantilla: (index: number, id: string) => void;
+  onGenerar: (index: number) => void;
+  onDownload: (index: number) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -143,60 +152,105 @@ function ManualStudyRow({
     return plantillas.filter(p => p.nombre.toLowerCase().includes(q));
   }, [plantillas, search]);
 
-  const selectedName = plantillas.find(p => p.id === selectedId)?.nombre;
+  const selectedName = plantillas.find(p => p.id === item.plantillaId)?.nombre;
+  const isDone = item.status === 'done';
+  const isGenerating = item.status === 'generating';
+  const isError = item.status === 'error';
 
   return (
-    <div className="flex flex-col gap-2 p-3 rounded-lg border border-border bg-background">
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{study.nombre_paciente}</p>
-        <p className="text-xs text-muted-foreground truncate">
-          {study.tipo_estudio} {study.region}
-          {study.lateralidad ? ` - ${study.lateralidad}` : ''}
-        </p>
-      </div>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
+    <div className={`flex flex-col gap-2 p-3 rounded-lg border bg-background transition-colors ${
+      isDone ? 'border-primary/40 bg-primary/5' : isError ? 'border-destructive/40' : 'border-border'
+    }`}>
+      {/* Cabecera del estudio */}
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="flex-shrink-0">
+          {isDone && <CheckCircle2 className="w-4 h-4 text-primary" />}
+          {isGenerating && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
+          {isError && <AlertTriangle className="w-4 h-4 text-destructive" />}
+          {item.status === 'idle' && <FileText className="w-4 h-4 text-muted-foreground" />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate">{item.study.nombre_paciente}</p>
+          <p className="text-xs text-muted-foreground truncate">
+            {item.study.tipo_estudio} {item.study.region}
+            {item.study.lateralidad ? ` · ${item.study.lateralidad}` : ''}
+          </p>
+        </div>
+        {isDone && (
           <Button
-            variant="outline"
-            size="sm"
-            className={`h-8 text-xs w-full justify-start font-normal truncate ${selectedId ? 'border-primary text-primary' : ''}`}
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 flex-shrink-0"
+            onClick={() => onDownload(index)}
+            title="Descargar este informe"
           >
-            {selectedName || 'Seleccionar plantilla...'}
+            <Download className="w-4 h-4" />
           </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-72 p-2" align="start">
-          <div className="flex items-center gap-2 mb-2">
-            <Search className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-            <Input
-              placeholder="Buscar plantilla..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-7 text-xs"
-              autoFocus
-            />
-          </div>
-          <ScrollArea className="max-h-[200px]">
-            <div className="space-y-0.5">
-              {filtered.length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-2">Sin resultados</p>
-              )}
-              {filtered.map(p => (
-                <button
-                  key={p.id}
-                  className={`w-full text-left text-xs px-2 py-1.5 rounded hover:bg-accent transition-colors ${p.id === selectedId ? 'bg-accent font-medium' : ''}`}
-                  onClick={() => {
-                    onSelect(p.id);
-                    setOpen(false);
-                    setSearch('');
-                  }}
-                >
-                  {p.nombre}
-                </button>
-              ))}
+        )}
+      </div>
+
+      {isError && (
+        <p className="text-xs text-destructive">{item.error}</p>
+      )}
+
+      {/* Selector de plantilla + botón Generar individual */}
+      <div className="flex items-center gap-2">
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className={`h-8 text-xs flex-1 justify-start font-normal truncate ${item.plantillaId ? 'border-primary/50 text-primary' : ''}`}
+              disabled={isGenerating}
+            >
+              {selectedName || 'Seleccionar plantilla...'}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-72 p-2" align="start">
+            <div className="flex items-center gap-2 mb-2">
+              <Search className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+              <Input
+                placeholder="Buscar plantilla..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-7 text-xs"
+                autoFocus
+              />
             </div>
-          </ScrollArea>
-        </PopoverContent>
-      </Popover>
+            <ScrollArea className="max-h-[200px]">
+              <div className="space-y-0.5">
+                {filtered.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-2">Sin resultados</p>
+                )}
+                {filtered.map(p => (
+                  <button
+                    key={p.id}
+                    className={`w-full text-left text-xs px-2 py-1.5 rounded hover:bg-accent transition-colors ${p.id === item.plantillaId ? 'bg-accent font-medium' : ''}`}
+                    onClick={() => { onSelectPlantilla(index, p.id); setOpen(false); setSearch(''); }}
+                  >
+                    {p.nombre}
+                  </button>
+                ))}
+              </div>
+            </ScrollArea>
+          </PopoverContent>
+        </Popover>
+
+        <Button
+          size="sm"
+          className="h-8 text-xs gap-1 whitespace-nowrap"
+          disabled={!item.plantillaId || isGenerating}
+          onClick={() => onGenerar(index)}
+        >
+          {isGenerating ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : isDone ? (
+            <><RefreshCw className="w-3.5 h-3.5" />Regenerar</>
+          ) : (
+            <><FileText className="w-3.5 h-3.5" />Generar</>
+          )}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -211,15 +265,12 @@ export function ReportGenerator({
   const [reports, setReports] = useState<GeneratedReport[]>([]);
   const [unmatchedStudies, setUnmatchedStudies] = useState<string[]>([]);
   const [step, setStep] = useState<'idle' | 'parsing' | 'manual-select' | 'generating' | 'done'>('idle');
-
-  // Modo: 'auto' = Groq detecta plantilla | 'manual' = usuario selecciona por estudio
   const [modo, setModo] = useState<'auto' | 'manual'>('auto');
 
-  // Para modo manual: estudios parseados antes de generar + plantillas seleccionadas
-  const [estudiosManual, setEstudiosManual] = useState<ParsedStudy[]>([]);
-  const [seleccionManual, setSeleccionManual] = useState<Record<number, string>>({});
+  // Estado modo manual: un item por estudio con su propio estado
+  const [estudiosManual, setEstudiosManual] = useState<ManualStudyState[]>([]);
 
-  // ── Parsear transcripción (común a ambos modos) ────────────────────────────
+  // ── Parsear transcripción ─────────────────────────────────────────────────
   const parsearTranscripcion = async (modoManual: boolean = false): Promise<ParsedStudy[]> => {
     const templateNames = modoManual ? [] : plantillas.map(p => p.nombre);
     const response = await fetch('/api/parse-transcription', {
@@ -236,20 +287,18 @@ export function ReportGenerator({
     return parsed.estudios || [];
   };
 
-  // ── Generar documentos Word a partir de estudios ya parseados ─────────────
+  // ── Generar documentos (modo auto) ────────────────────────────────────────
   const generarDocumentos = async (studies: ParsedStudy[], plantillasPorEstudio?: Record<number, string>) => {
     setStep('generating');
 
     const initialReports: GeneratedReport[] = studies.map((study, i) => {
-      // En modo manual usamos la plantilla seleccionada por el usuario
       const plantillaId = plantillasPorEstudio?.[i];
       const plantillaSeleccionada = plantillaId ? plantillas.find(p => p.id === plantillaId) : null;
       const plantillaMatchFinal = plantillaSeleccionada ? plantillaSeleccionada.nombre : study.plantilla_match;
-
       return {
         study: { ...study, plantilla_match: plantillaMatchFinal },
         blob: null,
-       fileName: `${study.nombre_archivo_sugerido || study.nombre_paciente}_${i + 1}.docx`,
+        fileName: `${study.nombre_archivo_sugerido || study.nombre_paciente}_${i + 1}.docx`,
         status: plantillaMatchFinal ? 'pending' as const : 'error' as const,
         error: plantillaMatchFinal ? undefined : 'No se encontró plantilla correspondiente',
       };
@@ -260,13 +309,10 @@ export function ReportGenerator({
     for (let i = 0; i < initialReports.length; i++) {
       const report = initialReports[i];
       if (report.status === 'error') continue;
-
       setReports(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'generating' as const } : r));
-
       try {
         const matchedPlantilla = plantillas.find(p => p.nombre === report.study.plantilla_match);
         if (!matchedPlantilla) throw new Error('Plantilla no encontrada en la lista');
-
         const templateBlob = await downloadPlantilla(matchedPlantilla);
         const modifiedBlob = await modifyTemplate(templateBlob, {
           nombre_paciente: report.study.nombre_paciente,
@@ -277,7 +323,6 @@ export function ReportGenerator({
           conclusiones: report.study.conclusiones,
           datos_clinicos: report.study.datos_clinicos,
         });
-
         setReports(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'done' as const, blob: modifiedBlob } : r));
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Error al generar';
@@ -296,7 +341,6 @@ export function ReportGenerator({
     setStep('parsing');
     setReports([]);
     setUnmatchedStudies([]);
-
     try {
       const studies = await parsearTranscripcion();
       if (studies.length === 0) {
@@ -313,14 +357,14 @@ export function ReportGenerator({
     }
   };
 
-  // ── MODO MANUAL: paso 1 — parsear y mostrar estudios con cajones ──────────
+  // ── MODO MANUAL paso 1: parsear ───────────────────────────────────────────
   const handleParsearManual = async () => {
     if (!textoFinal.trim()) return;
     setIsProcessing(true);
     setStep('parsing');
     setReports([]);
     setUnmatchedStudies([]);
-    setSeleccionManual({});
+    setEstudiosManual([]);
 
     try {
       const studies = await parsearTranscripcion(true);
@@ -329,7 +373,13 @@ export function ReportGenerator({
         setStep('idle');
         return;
       }
-      setEstudiosManual(studies);
+      setEstudiosManual(studies.map((study, i) => ({
+        study,
+        plantillaId: undefined,
+        status: 'idle' as const,
+        blob: null,
+        fileName: `${study.nombre_archivo_sugerido || study.nombre_paciente}_${i + 1}.docx`,
+      })));
       setStep('manual-select');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al analizar');
@@ -339,36 +389,70 @@ export function ReportGenerator({
     }
   };
 
-  // ── MODO MANUAL: paso 2 — generar con plantillas seleccionadas ────────────
-  const handleGenerarManual = async () => {
-    const sinPlantilla = estudiosManual.some((_, i) => !seleccionManual[i]);
-    if (sinPlantilla) {
-      toast.error('Selecciona una plantilla para cada estudio antes de generar');
-      return;
-    }
-    setIsProcessing(true);
+  // ── MODO MANUAL: seleccionar plantilla por estudio ────────────────────────
+  const handleSelectPlantilla = (index: number, plantillaId: string) => {
+    setEstudiosManual(prev => prev.map((item, i) => i === index ? { ...item, plantillaId } : item));
+  };
+
+  // ── MODO MANUAL: generar UN estudio individual ────────────────────────────
+  const handleGenerarUno = async (index: number) => {
+    const item = estudiosManual[index];
+    if (!item.plantillaId) return;
+
+    const plantilla = plantillas.find(p => p.id === item.plantillaId);
+    if (!plantilla) return;
+
+    setEstudiosManual(prev => prev.map((it, i) => i === index ? { ...it, status: 'generating' as const, error: undefined } : it));
+
     try {
-      await generarDocumentos(estudiosManual, seleccionManual);
+      const templateBlob = await downloadPlantilla(plantilla);
+      const modifiedBlob = await modifyTemplate(templateBlob, {
+        nombre_paciente: item.study.nombre_paciente,
+        tipo_estudio: item.study.tipo_estudio,
+        region: item.study.region,
+        lateralidad: item.study.lateralidad,
+        hallazgos: item.study.hallazgos,
+        conclusiones: item.study.conclusiones,
+        datos_clinicos: item.study.datos_clinicos,
+      });
+      const fileName = `${item.study.nombre_archivo_sugerido || item.study.nombre_paciente} - ${plantilla.nombre}.docx`;
+      setEstudiosManual(prev => prev.map((it, i) => i === index ? { ...it, status: 'done' as const, blob: modifiedBlob, fileName } : it));
+      toast.success(`Informe generado: ${item.study.nombre_paciente}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Error al generar');
-      setStep('idle');
-    } finally {
-      setIsProcessing(false);
+      const errorMsg = err instanceof Error ? err.message : 'Error al generar';
+      setEstudiosManual(prev => prev.map((it, i) => i === index ? { ...it, status: 'error' as const, error: errorMsg } : it));
+      toast.error(`Error: ${item.study.nombre_paciente}`);
     }
   };
 
-  // ── Reintentar con otra plantilla (para errores en lista de resultados) ────
-  const handleRetryWithTemplate = async (index: number) => {
-    const report = reports[index];
-    if (!report.manualPlantillaId) {
-      toast.error('Selecciona una plantilla primero');
+  // ── MODO MANUAL: descargar uno ────────────────────────────────────────────
+  const handleDownloadUno = (index: number) => {
+    const item = estudiosManual[index];
+    if (item.blob) saveAs(item.blob, item.fileName);
+  };
+
+  // ── MODO MANUAL: descargar todos los que ya están listos ─────────────────
+  const handleDownloadListos = async () => {
+    const listos = estudiosManual.filter(it => it.status === 'done' && it.blob);
+    if (listos.length === 0) return;
+    if (listos.length === 1) {
+      saveAs(listos[0].blob!, listos[0].fileName);
       return;
     }
+    const zip = new JSZip();
+    listos.forEach(it => { if (it.blob) zip.file(it.fileName, it.blob); });
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    saveAs(zipBlob, 'Informes.zip');
+  };
+
+  // ── Reintentar con otra plantilla (modo auto, errores) ────────────────────
+  const handleRetryWithTemplate = async (index: number) => {
+    const report = reports[index];
+    if (!report.manualPlantillaId) { toast.error('Selecciona una plantilla primero'); return; }
     const selectedPlantilla = plantillas.find(p => p.id === report.manualPlantillaId);
     if (!selectedPlantilla) return;
 
     setReports(prev => prev.map((r, idx) => idx === index ? { ...r, status: 'generating' as const, error: undefined } : r));
-
     try {
       const templateBlob = await downloadPlantilla(selectedPlantilla);
       const modifiedBlob = await modifyTemplate(templateBlob, {
@@ -405,7 +489,10 @@ export function ReportGenerator({
 
   const successCount = reports.filter(r => r.status === 'done').length;
   const errorCount = reports.filter(r => r.status === 'error').length;
-  const todasSeleccionadas = estudiosManual.length > 0 && estudiosManual.every((_, i) => !!seleccionManual[i]);
+
+  // Contadores modo manual
+  const listosCount = estudiosManual.filter(it => it.status === 'done').length;
+  const conPlantillaCount = estudiosManual.filter(it => !!it.plantillaId).length;
 
   return (
     <div className="space-y-4">
@@ -434,7 +521,6 @@ export function ReportGenerator({
         </div>
       )}
 
-      {/* ── Descripción del modo ── */}
       {step === 'idle' && (
         <p className="text-xs text-muted-foreground text-center">
           {modo === 'auto'
@@ -461,50 +547,69 @@ export function ReportGenerator({
         </Button>
       )}
 
-      {/* ── MODO MANUAL: cajones de selección por estudio ── */}
+      {/* ── MODO MANUAL: lista de estudios con generación individual ── */}
       {step === 'manual-select' && (
-  <div className="space-y-3 flex flex-col">
-          <p className="text-sm font-medium text-foreground">
-            Se detectaron {estudiosManual.length} estudio{estudiosManual.length !== 1 ? 's' : ''}. Selecciona la plantilla para cada uno:
-          </p>
-          <ScrollArea className="h-[400px] overflow-y-auto">
+        <div className="space-y-3 flex flex-col">
+          {/* Cabecera con contadores y botón descargar listos */}
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <p className="text-sm font-medium text-foreground">
+              {estudiosManual.length} estudio{estudiosManual.length !== 1 ? 's' : ''} detectado{estudiosManual.length !== 1 ? 's' : ''}
+              {listosCount > 0 && (
+                <span className="ml-2 text-primary">· {listosCount} listo{listosCount !== 1 ? 's' : ''}</span>
+              )}
+            </p>
+            <div className="flex gap-2">
+              {listosCount > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-xs"
+                  onClick={handleDownloadListos}
+                >
+                  <PackageOpen className="w-3.5 h-3.5" />
+                  {listosCount === 1
+                    ? 'Descargar listo'
+                    : `Descargar ${listosCount} listos (ZIP)`}
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setStep('idle'); setEstudiosManual([]); }}
+                disabled={estudiosManual.some(it => it.status === 'generating')}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+
+          <ScrollArea className="h-[480px] overflow-y-auto">
             <div className="space-y-2 pr-3">
-              {estudiosManual.map((study, i) => (
+              {estudiosManual.map((item, i) => (
                 <ManualStudyRow
                   key={i}
-                  study={study}
+                  item={item}
+                  index={i}
                   plantillas={plantillas}
-                  selectedId={seleccionManual[i]}
-                  onSelect={(id) => setSeleccionManual(prev => ({ ...prev, [i]: id }))}
+                  onSelectPlantilla={handleSelectPlantilla}
+                  onGenerar={handleGenerarUno}
+                  onDownload={handleDownloadUno}
                 />
               ))}
             </div>
           </ScrollArea>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => { setStep('idle'); setEstudiosManual([]); setSeleccionManual({}); }}
-              disabled={isProcessing}
-            >
-              Cancelar
-            </Button>
-            <Button
-              className="flex-1 gap-2"
-              onClick={handleGenerarManual}
-              disabled={!todasSeleccionadas || isProcessing}
-            >
-              {isProcessing ? (
-                <><Loader2 className="w-4 h-4 animate-spin" />Generando...</>
-              ) : (
-                <><FileText className="w-4 h-4" />Generar Informes</>
-              )}
-            </Button>
+
+          {/* Barra de estado inferior */}
+          <div className="flex items-center justify-between pt-1 border-t border-border text-xs text-muted-foreground">
+            <span>{conPlantillaCount}/{estudiosManual.length} con plantilla seleccionada</span>
+            {listosCount > 0 && (
+              <span className="text-primary font-medium">{listosCount} informe{listosCount !== 1 ? 's' : ''} listo{listosCount !== 1 ? 's' : ''} para descargar</span>
+            )}
           </div>
         </div>
       )}
 
-      {/* ── Lista de resultados ── */}
+      {/* ── Lista de resultados (modo auto) ── */}
       {reports.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -545,6 +650,7 @@ export function ReportGenerator({
                       {report.status === 'generating' && <Loader2 className="w-5 h-5 animate-spin text-primary" />}
                       {report.status === 'error' && <AlertTriangle className="w-5 h-5 text-destructive" />}
                       {report.status === 'pending' && <FileText className="w-5 h-5 text-muted-foreground" />}
+                      {report.status === 'done' && <CheckCircle2 className="w-5 h-5 text-primary" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{report.study.nombre_paciente}</p>
@@ -584,12 +690,12 @@ export function ReportGenerator({
         </div>
       )}
 
-      {/* ── Volver a generar tras completar ── */}
+      {/* ── Volver a generar tras completar (modo auto) ── */}
       {step === 'done' && (
         <Button
           variant="outline"
           className="w-full gap-2"
-          onClick={() => { setStep('idle'); setReports([]); setEstudiosManual([]); setSeleccionManual({}); setUnmatchedStudies([]); }}
+          onClick={() => { setStep('idle'); setReports([]); setEstudiosManual([]); setUnmatchedStudies([]); }}
         >
           <RefreshCw className="w-4 h-4" />
           Generar nuevos informes

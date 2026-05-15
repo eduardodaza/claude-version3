@@ -1,0 +1,13 @@
+project_id = "unvsukgltzwbmjcjawnx"
+
+[storage]
+file_size_limit = "100MiB"
+
+[functions.transcribe]
+verify_jwt = false
+
+[functions.transcribe-with-storage]
+verify_jwt = false
+
+[functions.edit-text]
+verify_jwt = false

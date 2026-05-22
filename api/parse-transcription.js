@@ -174,7 +174,8 @@ function dividirPorEstudios(texto, numEstudios, nombresPacientes) {
   }
 
   // REGLA 1: separadores --- AUDIO ---
-  const sepRegex = /---[^\n]+-{2,}/g;
+  // Usar .+? (non-greedy) para no consumir separadores adyacentes en la misma línea
+  const sepRegex = /---\s*.+?\s*---/g;
   let m;
   const separadores = [];
   while ((m = sepRegex.exec(texto)) !== null) {
@@ -182,6 +183,9 @@ function dividirPorEstudios(texto, numEstudios, nombresPacientes) {
   }
   if (separadores.length > 0) {
     const bloquesAudio = [];
+    // Incluir texto antes del primer separador si existe
+    const antePrimero = texto.substring(0, separadores[0].pos).trim();
+    if (antePrimero.length > 20) bloquesAudio.push(antePrimero);
     for (let i = 0; i < separadores.length; i++) {
       const ini = separadores[i].fin;
       const fin = i + 1 < separadores.length ? separadores[i + 1].pos : texto.length;
@@ -313,10 +317,16 @@ module.exports.default = async function handler(req, res) {
     return res.status(400).json({ error: 'Se requiere transcriptionText' });
 
   try {
+    // Pre-contar separadores --- AUDIO --- para informar al LLM cuántos estudios hay
+    const sepMatches = [...transcriptionText.matchAll(/---\s*.+?\s*---/g)];
+    const numAudios = sepMatches.length;
+
     let systemFinal;
 
     if (modoManual) {
-      systemFinal = systemPromptManual;
+      systemFinal = numAudios > 1
+        ? `${systemPromptManual}\n\nATENCIÓN: La transcripción contiene ${numAudios} bloques de audio separados por "--- AUDIO-... ---". Debes extraer EXACTAMENTE ${numAudios} estudios, uno por cada bloque.`
+        : systemPromptManual;
     } else {
       const textoLower = transcriptionText.toLowerCase();
       const esTAC = textoLower.includes('tac');
@@ -333,7 +343,11 @@ module.exports.default = async function handler(req, res) {
         ? plantillasFiltradas
         : (templateNames || []);
 
-      systemFinal = `${systemPromptAuto}\n\nPLANTILLAS:\n${plantillasAUsar.join('\n')}`;
+      const avisoAudios = numAudios > 1
+        ? `\n\nATENCIÓN: La transcripción contiene ${numAudios} bloques de audio separados por "--- AUDIO-... ---". Debes extraer EXACTAMENTE ${numAudios} estudios, uno por cada bloque. No omitas ninguno.`
+        : '';
+
+      systemFinal = `${systemPromptAuto}${avisoAudios}\n\nPLANTILLAS:\n${plantillasAUsar.join('\n')}`;
     }
 
     const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {

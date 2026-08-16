@@ -36,6 +36,7 @@ module.exports.default = async function handler(req, res) {
         ],
         temperature: 0.3,
         max_tokens: 2000,
+        reasoning_effort: 'low',
       }),
     });
 
@@ -48,7 +49,15 @@ module.exports.default = async function handler(req, res) {
     }
 
     const result = JSON.parse(responseText);
-    const editedText = (result.choices?.[0]?.message?.content || '').trim();
+    const message = result.choices?.[0]?.message || {};
+    const editedText = (message.content || '').trim();
+
+    if (!editedText) {
+      return res.status(500).json({
+        error: 'El modelo no devolvió texto editado (posible fallo de reasoning_content vacío).',
+        detalle: message,
+      });
+    }
 
     return res.status(200).json({ success: true, editedText });
 

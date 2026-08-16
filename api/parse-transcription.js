@@ -363,6 +363,7 @@ module.exports.default = async function handler(req, res) {
         tool_choice: { type: 'function', function: { name: 'parse_transcription_result' } },
         temperature: 0.1,
         max_tokens: 4000,
+        reasoning_effort: 'low',
       }),
     });
 
@@ -380,8 +381,12 @@ module.exports.default = async function handler(req, res) {
     if (!toolCall?.function?.arguments) {
       const content = aiData.choices?.[0]?.message?.content || '';
       const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/) || content.match(/(\{[\s\S]*\})/);
-      if (!jsonMatch)
-        return res.status(500).json({ error: 'No se pudo parsear la respuesta de Groq' });
+      if (!jsonMatch) {
+        return res.status(500).json({
+          error: 'No se pudo parsear la respuesta de Groq (sin tool_call ni contenido JSON).',
+          detalle: aiData.choices?.[0]?.message || null,
+        });
+      }
       return res.status(200).json(JSON.parse(jsonMatch[1] || jsonMatch[0]));
     }
 

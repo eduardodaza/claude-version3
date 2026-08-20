@@ -364,6 +364,7 @@ module.exports.default = async function handler(req, res) {
         temperature: 0.1,
         max_tokens: 4000,
         reasoning_effort: 'low',
+        disable_tool_validation: true,
       }),
     });
 
@@ -376,6 +377,10 @@ module.exports.default = async function handler(req, res) {
     }
 
     const aiData = JSON.parse(responseText);
+    // Con disable_tool_validation activo, Groq puede devolver el tool_call con
+    // un nombre ligeramente distinto al declarado (bug conocido de gpt-oss-120b).
+    // Aceptamos cualquier tool_call presente, sin exigir que el nombre coincida
+    // exactamente con 'parse_transcription_result'.
     const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
 
     if (!toolCall?.function?.arguments) {
